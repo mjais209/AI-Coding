@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Azure Queue Orders</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1b1b1b; }
+  h1 { margin-bottom: .2rem; } .sub { color: #666; margin-top: 0; }
+  form, table { width: 100%; } fieldset { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }
+  input { padding: .4rem; margin: .2rem; } button { padding: .5rem 1rem; cursor: pointer; }
+  table { border-collapse: collapse; margin-top: 1.5rem; } th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #eee; }
+  .status { padding: .15rem .5rem; border-radius: 10px; font-size: .85rem; }
+  .queued { background: #fff3cd; } .processing { background: #cfe2ff; } .processed { background: #d1e7dd; } .failed { background: #f8d7da; }
+  pre { background: #f6f8fa; padding: 1rem; border-radius: 8px; overflow: auto; }
+</style>
+</head>
+<body>
+<h1>Orders</h1>
+<p class="sub">API &rarr; Azure Storage Queue &rarr; Worker &rarr; Azure Blob + Table Storage &middot; queue depth: <b id="depth">-</b></p>
+<form id="order-form">
+  <fieldset>
+    <input id="customer" placeholder="Customer" required>
+    <div id="items"></div>
+    <button type="button" id="add-item">+ Item</button>
+    <button type="submit">Submit order</button>
+  </fieldset>
+</form>
+<table>
+  <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th><th>Created</th></tr></thead>
+  <tbody id="orders"></tbody>
+</table>
+<pre id="receipt" hidden></pre>
+<script>
+const itemsEl = document.getElementById('items');
+function addItem() {
+  const row = document.createElement('div');
+  row.innerHTML = '<input class="sku" placeholder="SKU" required> <input class="qty" type="number" min="1" value="1" required> <input class="price" type="number" min="0" step="0.01" placeholder="Unit price" required>';
+  itemsEl.appendChild(row);
+}
+document.getElementById('add-item').onclick = addItem;
+addItem();
+
+document.getElementById('order-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const items = [...itemsEl.children].map(r => ({
+    sku: r.querySelector('.sku').value,
+    quantity: +r.querySelector('.qty').value,
+    unit_price: +r.querySelector('.price').value,
+  }));
+  await fetch('orders', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ customer: document.getElementById('customer').value, items }) });
+  e.target.reset(); itemsEl.innerHTML = ''; addItem(); refresh();
+};
+
+async function showReceipt(id) {
+  const res = await fetch(`orders/${id}/receipt`);
+  const el = document.getElementById('receipt');
+  el.hidden = false;
+  el.textContent = res.ok ? JSON.stringify(await res.json(), null, 2) : 'Receipt not available yet';
+}
+
+async function refresh() {
+  const [orders, health] = await Promise.all([fetch('orders').then(r => r.json()), fetch('health').then(r => r.json())]);
+  document.getElementById('depth').textContent = health.queue_depth;
+  const tbody = document.getElementById('orders');
+  tbody.innerHTML = '';
+  for (const o of orders) {
+    const tr = document.createElement('tr');
+    const link = document.createElement('a');
+    link.href = '#'; link.textContent = o.id.slice(0, 8);
+    link.onclick = (ev) => { ev.preventDefault(); showReceipt(o.id); };
+    const cells = [link, o.customer, null, o.total != null ? o.total.toFixed(2) : '-', new Date(o.created_at).toLocaleString()];
+    cells.forEach((c, i) => {
+      const td = document.createElement('td');
+      if (i === 2) { const s = document.createElement('span'); s.className = `status ${o.status}`; s.textContent = o.status; td.appendChild(s); }
+      else if (c instanceof Node) td.appendChild(c); else td.textContent = c;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  }
+}
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
