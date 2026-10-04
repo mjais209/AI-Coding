@@ -20,6 +20,11 @@ public static class OrderValidator
         for (var i = 0; i < order.Items.Count; i++)
         {
             var item = order.Items[i];
+            if (item is null)
+            {
+                errors[$"items[{i}]"] = ["Item is required."];
+                continue;
+            }
             if (string.IsNullOrWhiteSpace(item.Sku))
                 errors[$"items[{i}].sku"] = ["SKU is required."];
             if (item.Quantity <= 0)

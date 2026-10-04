@@ -28,6 +28,7 @@ public class ReceiptBuilderTests
         var errors = OrderValidator.Validate(new OrderRequest("", [new OrderItem("", 0, -1m)]));
         string[] expected = ["customer", "items[0].quantity", "items[0].sku", "items[0].unit_price"];
         Assert.Equal(expected, errors.Keys.Order());
+        Assert.Equal(["items[0]"], OrderValidator.Validate(new OrderRequest("Ada", [null!])).Keys);
         Assert.Empty(OrderValidator.Validate(new OrderRequest("Ada", [new OrderItem("A", 1, 1m)])));
     }
 }

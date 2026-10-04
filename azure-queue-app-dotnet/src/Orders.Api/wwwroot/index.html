@@ -11,6 +11,7 @@
   table { border-collapse: collapse; margin-top: 1.5rem; } th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #eee; }
   .status { padding: .15rem .5rem; border-radius: 10px; font-size: .85rem; }
   .queued { background: #fff3cd; } .processing { background: #cfe2ff; } .processed { background: #d1e7dd; } .failed { background: #f8d7da; }
+  .error { color: #b02a37; margin: .5rem 0 0; white-space: pre-line; }
   pre { background: #f6f8fa; padding: 1rem; border-radius: 8px; overflow: auto; }
 </style>
 </head>
@@ -23,6 +24,7 @@
     <div id="items"></div>
     <button type="button" id="add-item">+ Item</button>
     <button type="submit">Submit order</button>
+    <p id="form-error" class="error" role="alert" hidden></p>
   </fieldset>
 </form>
 <table>
@@ -47,8 +49,24 @@ document.getElementById('order-form').onsubmit = async (e) => {
     quantity: +r.querySelector('.qty').value,
     unit_price: +r.querySelector('.price').value,
   }));
-  await fetch('api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ customer: document.getElementById('customer').value, items }) });
+  const errorEl = document.getElementById('form-error');
+  errorEl.hidden = true;
+  let res;
+  try {
+    res = await fetch('api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer: document.getElementById('customer').value, items }) });
+  } catch {
+    errorEl.textContent = 'Could not reach the server. Please try again.';
+    errorEl.hidden = false;
+    return;
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const messages = body && body.errors ? Object.values(body.errors).flat() : [];
+    errorEl.textContent = messages.length ? messages.join('\n') : `Order failed (HTTP ${res.status}).`;
+    errorEl.hidden = false;
+    return;
+  }
   e.target.reset(); itemsEl.innerHTML = ''; addItem(); refresh();
 };
 
